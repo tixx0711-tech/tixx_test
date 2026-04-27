@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tixx 小组经营分析系统</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Tixx 小组经营分析系统</h1>
+    <nav>
+      <button class="nav-btn active" data-target="dashboard">首页 Dashboard</button>
+      <button class="nav-btn" data-target="upload">数据上传</button>
+      <button class="nav-btn" data-target="warning">库存预警</button>
+      <button class="nav-btn" data-target="aftersales">售后分析</button>
+      <button class="nav-btn" data-target="history">历史数据</button>
+      <button class="nav-btn" data-target="settings">设置</button>
+    </nav>
+  </header>
+
+  <section class="filters card">
+    <div class="filter-grid">
+      <input id="orderSearch" placeholder="订单搜索：订单编号/店长/店铺" />
+      <input id="productSearch" placeholder="产品搜索：SKU/产品中文名" />
+      <select id="bizType"><option value="">全部业务类型</option><option>生活家电</option><option>厨房家电</option></select>
+      <select id="managerFilter"><option value="">全部店长</option><option>黄向阳</option><option>黄文锐</option><option>邱旺斌</option><option>雷雨晴</option><option>吴瑀玲</option></select>
+      <select id="shopFilter"><option value="">全部店铺</option><option>Tixx-Appliances</option><option>Tixx Lucky Store</option><option>Tixx ThaiRise</option><option>Tixx LifeStyle Hub</option><option>Tixx-Easyhome</option><option>Tixx-MegaHome</option><option>Tixx-SmartHome</option><option>Tixx-PrimeHome</option><option>Tixx-ThaiHome</option><option>Tixx Sabai Home</option></select>
+      <select id="monthFilter"><option value="">全部月份</option></select>
+      <select id="categoryFilter"><option value="">全部类目</option><option>厨房电器</option><option>大型电器</option><option>个护电器</option><option>净水饮水</option><option>清洁电器</option><option>生活电器</option></select>
+      <button id="clearFilter">清空筛选</button>
+      <button id="exportFiltered">导出筛选结果CSV</button>
+    </div>
+  </section>
+
+  <main>
+    <section id="dashboard" class="page active">
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <div class="chart-grid">
+        <article class="card"><h3>1. 订单曲线看板</h3><canvas id="orderTrendChart"></canvas></article>
+        <article class="card"><h3>2. 销售额曲线看板</h3><canvas id="salesTrendChart"></canvas></article>
+        <article class="card"><h3>3. 类目销售看板</h3><canvas id="categorySalesChart"></canvas></article>
+        <article class="card"><h3>4. 库存量分析看板</h3><canvas id="inventoryChart"></canvas></article>
+        <article class="card"><h3>5. 在途库存分析看板</h3><canvas id="transitChart"></canvas></article>
+        <article class="card"><h3>6. 超期库存与超期金额看板</h3><canvas id="overdueChart"></canvas></article>
+        <article class="card"><h3>7. 店长销售分析（饼图）</h3><canvas id="managerPieChart"></canvas></article>
+        <article class="card"><h3>7. 店长销售分析（柱状图）</h3><canvas id="managerBarChart"></canvas></article>
+        <article class="card"><h3>8. 店铺销售分析（饼图）</h3><canvas id="shopPieChart"></canvas></article>
+        <article class="card"><h3>8. 店铺销售分析（柱状图）</h3><canvas id="shopBarChart"></canvas></article>
+        <article class="card wide"><h3>10. 小组日销量跟踪看板</h3><canvas id="dailyTrackChart"></canvas></article>
+      </div>
+      <article class="card wide">
+        <h3>9. 产品销量变化分析（周对比）</h3>
+        <button class="table-export" data-table="weeklyChangeTable">导出CSV</button>
+        <div class="table-wrap"><table id="weeklyChangeTable"></table></div>
+      </article>
+    </section>
+
+    <section id="upload" class="page">
+      <div class="upload-grid" id="uploadGrid"></div>
+      <p id="uploadMsg" class="upload-msg"></p>
+    </section>
+
+    <section id="warning" class="page">
+      <article class="card wide">
+        <h3>预警中心</h3>
+        <button class="table-export" data-table="warningTable">导出CSV</button>
+        <div class="table-wrap"><table id="warningTable"></table></div>
+      </article>
+    </section>
+
+    <section id="aftersales" class="page">
+      <div class="chart-grid">
+        <article class="card"><h3>11. 售后率排行榜</h3><canvas id="afterRateChart"></canvas></article>
+        <article class="card"><h3>售后类型分析</h3><canvas id="afterTypeChart"></canvas></article>
+      </div>
+      <article class="card wide">
+        <h3>售后明细</h3>
+        <button class="table-export" data-table="afterTable">导出CSV</button>
+        <div class="table-wrap"><table id="afterTable"></table></div>
+      </article>
+    </section>
+
+    <section id="history" class="page">
+      <article class="card wide">
+        <h3>历史上传记录</h3>
+        <div id="historyList"></div>
+      </article>
+    </section>
+
+    <section id="settings" class="page">
+      <article class="card">
+        <h3>数据管理</h3>
+        <div id="clearButtons"></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
