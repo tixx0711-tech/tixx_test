@@ -1,0 +1,98 @@
+:root {
+  --bg: #f4f6fb;
+  --card: #fff;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --primary: #0071e3;
+  --danger: #d70015;
+  --shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+  --radius: 16px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+}
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid #edf0f7;
+}
+.topbar {
+  margin: 14px;
+  padding: 16px 20px;
+}
+.topbar h1 { margin: 0; font-size: 28px; }
+.topbar p { margin: 6px 0 0; color: var(--muted); }
+.layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 14px;
+  padding: 0 14px 20px;
+}
+.left-col, .right-col { display: grid; gap: 14px; align-content: start; }
+article { padding: 14px; }
+h2 { margin: 0 0 12px; font-size: 18px; }
+label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+input, textarea, select, button {
+  width: 100%;
+  border: 1px solid #d9dcea;
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+}
+button {
+  background: #eaf3ff;
+  border-color: #bdd8ff;
+  color: #0154a6;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:hover { filter: brightness(0.98); }
+button.danger { background: #ffebee; border-color: #ffc9d0; color: #b00020; }
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.form-grid .full { grid-column: 1 / -1; }
+textarea { min-height: 88px; resize: vertical; }
+.preview-box {
+  height: 200px;
+  border: 1px dashed #cad3e8;
+  border-radius: 12px;
+  background: #fafcff;
+  margin-top: 10px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.preview-box img { width: 100%; height: 100%; object-fit: contain; display: none; }
+.tip { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.btn-row button { width: auto; }
+#previewCanvas {
+  width: 100%;
+  max-width: 640px;
+  border-radius: 14px;
+  border: 1px solid #e3e9f5;
+  background: #fff;
+}
+.output { min-height: 330px; white-space: pre-wrap; }
+.api-slot {
+  margin: 0;
+  background: #f7f9fe;
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid #e4e8f2;
+  font-size: 12px;
+  color: #4f5b76;
+}
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: 1fr; }
+}
