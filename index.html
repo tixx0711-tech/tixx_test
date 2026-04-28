@@ -1,99 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tixx 小组经营分析系统</title>
+  <title>Tixx AI Product Image Generator - Indonesia TikTok Edition</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <h1>Tixx 小组经营分析系统</h1>
-    <nav>
-      <button class="nav-btn active" data-target="dashboard">首页 Dashboard</button>
-      <button class="nav-btn" data-target="upload">数据上传</button>
-      <button class="nav-btn" data-target="warning">库存预警</button>
-      <button class="nav-btn" data-target="aftersales">售后分析</button>
-      <button class="nav-btn" data-target="history">历史数据</button>
-      <button class="nav-btn" data-target="settings">设置</button>
-    </nav>
+  <header class="topbar card">
+    <div>
+      <h1>Tixx AI Product Image Generator</h1>
+      <p>Indonesia TikTok Edition</p>
+    </div>
   </header>
 
-  <section class="filters card">
-    <div class="filter-grid">
-      <input id="orderSearch" placeholder="订单搜索：订单编号/店长/店铺" />
-      <input id="productSearch" placeholder="产品搜索：SKU/产品中文名" />
-      <select id="bizType"><option value="">全部业务类型</option><option>生活家电</option><option>厨房家电</option></select>
-      <select id="managerFilter"><option value="">全部店长</option><option>黄向阳</option><option>黄文锐</option><option>邱旺斌</option><option>雷雨晴</option><option>吴瑀玲</option></select>
-      <select id="shopFilter"><option value="">全部店铺</option><option>Tixx-Appliances</option><option>Tixx Lucky Store</option><option>Tixx ThaiRise</option><option>Tixx LifeStyle Hub</option><option>Tixx-Easyhome</option><option>Tixx-MegaHome</option><option>Tixx-SmartHome</option><option>Tixx-PrimeHome</option><option>Tixx-ThaiHome</option><option>Tixx Sabai Home</option></select>
-      <select id="monthFilter"><option value="">全部月份</option></select>
-      <select id="categoryFilter"><option value="">全部类目</option><option>厨房电器</option><option>大型电器</option><option>个护电器</option><option>净水饮水</option><option>清洁电器</option><option>生活电器</option></select>
-      <button id="clearFilter">清空筛选</button>
-      <button id="exportFiltered">导出筛选结果CSV</button>
-    </div>
-  </section>
-
-  <main>
-    <section id="dashboard" class="page active">
-      <div class="kpi-grid" id="kpiGrid"></div>
-      <div class="chart-grid">
-        <article class="card"><h3>1. 订单曲线看板</h3><canvas id="orderTrendChart"></canvas></article>
-        <article class="card"><h3>2. 销售额曲线看板</h3><canvas id="salesTrendChart"></canvas></article>
-        <article class="card"><h3>3. 类目销售看板</h3><canvas id="categorySalesChart"></canvas></article>
-        <article class="card"><h3>4. 库存量分析看板</h3><canvas id="inventoryChart"></canvas></article>
-        <article class="card"><h3>5. 在途库存分析看板</h3><canvas id="transitChart"></canvas></article>
-        <article class="card"><h3>6. 超期库存与超期金额看板</h3><canvas id="overdueChart"></canvas></article>
-        <article class="card"><h3>7. 店长销售分析（饼图）</h3><canvas id="managerPieChart"></canvas></article>
-        <article class="card"><h3>7. 店长销售分析（柱状图）</h3><canvas id="managerBarChart"></canvas></article>
-        <article class="card"><h3>8. 店铺销售分析（饼图）</h3><canvas id="shopPieChart"></canvas></article>
-        <article class="card"><h3>8. 店铺销售分析（柱状图）</h3><canvas id="shopBarChart"></canvas></article>
-        <article class="card wide"><h3>10. 小组日销量跟踪看板</h3><canvas id="dailyTrackChart"></canvas></article>
-      </div>
-      <article class="card wide">
-        <h3>9. 产品销量变化分析（周对比）</h3>
-        <button class="table-export" data-table="weeklyChangeTable">导出CSV</button>
-        <div class="table-wrap"><table id="weeklyChangeTable"></table></div>
-      </article>
-    </section>
-
-    <section id="upload" class="page">
-      <div class="upload-grid" id="uploadGrid"></div>
-      <p id="uploadMsg" class="upload-msg"></p>
-    </section>
-
-    <section id="warning" class="page">
-      <article class="card wide">
-        <h3>预警中心</h3>
-        <button class="table-export" data-table="warningTable">导出CSV</button>
-        <div class="table-wrap"><table id="warningTable"></table></div>
-      </article>
-    </section>
-
-    <section id="aftersales" class="page">
-      <div class="chart-grid">
-        <article class="card"><h3>11. 售后率排行榜</h3><canvas id="afterRateChart"></canvas></article>
-        <article class="card"><h3>售后类型分析</h3><canvas id="afterTypeChart"></canvas></article>
-      </div>
-      <article class="card wide">
-        <h3>售后明细</h3>
-        <button class="table-export" data-table="afterTable">导出CSV</button>
-        <div class="table-wrap"><table id="afterTable"></table></div>
-      </article>
-    </section>
-
-    <section id="history" class="page">
-      <article class="card wide">
-        <h3>历史上传记录</h3>
-        <div id="historyList"></div>
-      </article>
-    </section>
-
-    <section id="settings" class="page">
+  <main class="layout">
+    <section class="left-col">
       <article class="card">
-        <h3>数据管理</h3>
-        <div id="clearButtons"></div>
+        <h2>Step 1：上传劣质原图</h2>
+        <input id="productImageInput" type="file" accept="image/*" />
+        <div class="preview-box"><img id="productPreview" alt="产品原图预览" /></div>
+        <button id="genPreprocessBtn">生成高清白底修复 Prompt</button>
+      </article>
+
+      <article class="card">
+        <h2>Step 2：输入产品信息</h2>
+        <div class="form-grid">
+          <label>产品名称<input id="productName" placeholder="例如：智能空气炸锅 6L" /></label>
+          <label>品牌名称<input id="brandName" value="Tixx" /></label>
+          <label class="full">产品参数<textarea id="productParams" placeholder="例如：1200W，6L，低噪音，触控面板"></textarea></label>
+          <label>核心卖点 1<input id="sp1" placeholder="例如：节能省电" /></label>
+          <label>核心卖点 2<input id="sp2" placeholder="例如：低噪静音" /></label>
+          <label>核心卖点 3<input id="sp3" placeholder="例如：大容量家庭适用" /></label>
+          <label>目标语言
+            <select id="targetLang">
+              <option>印尼语</option><option>英文</option><option>印尼语+英文</option>
+            </select>
+          </label>
+          <label>产品类目
+            <select id="category">
+              <option>生活家电</option><option>厨房电器</option><option>清洁电器</option><option>净水饮水</option><option>大型电器</option><option>个护电器</option>
+            </select>
+          </label>
+          <label>使用场景
+            <select id="scene">
+              <option>现代雅加达公寓</option><option>印尼家庭厨房</option><option>小户型卧室</option><option>客厅</option><option>洗衣区</option><option>自定义</option>
+            </select>
+          </label>
+          <label>主图风格
+            <select id="style">
+              <option>温馨家居</option><option>高级科技</option><option>清爽白橙</option><option>强促销</option><option>极简白底</option>
+            </select>
+          </label>
+          <label class="full">自定义场景（当“使用场景=自定义”时生效）<input id="customScene" placeholder="例如：Cozy Indonesian family living room" /></label>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Step 3：上传主图框（PNG）</h2>
+        <input id="frameImageInput" type="file" accept="image/png,image/*" />
+        <div class="preview-box"><img id="framePreview" alt="主图框预览" /></div>
+        <p class="tip">主图框必须保持不变，不裁剪，不拉伸，不改变文字和品牌元素。</p>
+      </article>
+
+      <article class="card">
+        <h2>AI 营销大脑</h2>
+        <div class="btn-row">
+          <button id="genPlanBtn">生成印尼 TikTok 主图方案</button>
+          <button id="genRenderPromptBtn">生成 ChatGPT Image 2.0 渲染 Prompt</button>
+          <button id="genInpaintPromptBtn">生成局部重绘 Prompt</button>
+        </div>
+        <label>需要局部修改的地方<textarea id="inpaintRequest" placeholder="例如：加强产品底部阴影，优化左下角地板纹理"></textarea></label>
+      </article>
+    </section>
+
+    <section class="right-col">
+      <article class="card">
+        <h2>主图预览（800x800）</h2>
+        <canvas id="previewCanvas" width="800" height="800"></canvas>
+        <div class="btn-row">
+          <button id="exportPngBtn">导出预览 PNG</button>
+          <button id="clearAllBtn" class="danger">清空全部内容</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>生成结果</h2>
+        <div class="btn-row">
+          <button id="copyPromptBtn">复制 Prompt</button>
+          <button id="exportTxtBtn">导出 Prompt TXT</button>
+        </div>
+        <textarea id="output" class="output" placeholder="点击按钮生成 Prompt / 方案"></textarea>
+      </article>
+
+      <article class="card">
+        <h2>后续 API 接入预留</h2>
+        <p class="tip">当前版本不调用真实 API。后续可接入 OpenAI Images Generate / Edit / Variation 接口。</p>
+        <pre class="api-slot">// TODO: integrate real API
+// async function generateImageWithOpenAI(prompt, sourceImage, frameImage) {}
+// async function editImageWithOpenAI(prompt, maskedArea) {}</pre>
       </article>
     </section>
   </main>

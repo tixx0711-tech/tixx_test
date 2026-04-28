@@ -1,290 +1,463 @@
-const STORAGE_KEY = 'tixx_data_v1';
-const HISTORY_KEY = 'tixx_history_v1';
-const STATUS_MAP = { '已发货': 1, '运输中': 2, '清关中': 3, '已入仓': 4 };
-const DATASETS = [
-  { key: 'orders', name: '订单表格' },
-  { key: 'transit', name: '库存周转/在途表格' },
-  { key: 'inventory', name: '库存表格' },
-  { key: 'sales', name: '销售表格' },
-  { key: 'overdue', name: '超期表格' },
-  { key: 'afterSales', name: '售后表格' }
-];
-const F = {
-  orderNo: ['订单编号', '订单号'], date: ['日期', '下单日期'], manager: ['店长'], shop: ['店铺名', '店铺名称'],
-  sku: ['SKU', 'sku'], product: ['产品名称', '产品中文名', '品名'], category: ['产品类目', '类目'],
-  orderQty: ['订单数量', '数量'], salesQty: ['销售数量', '销量'], amount: ['销售金额', '金额'],
-  bizType: ['业务类型'], transitQty: ['在途库存量', '在途量'], transitStatus: ['在途状态'], eta: ['预计到货时间'],
-  warehouseQty: ['仓位库存'], availableQty: ['可用库存量'], days: ['当前可售天数'], overdueQty: ['超期库存量'],
-  overdueAmount: ['超期金额'], afterType: ['售后类型'], isCod: ['是否COD', 'COD'], refundAmount: ['退款金额']
+const STORAGE_KEY = 'tixx_image_generator_v1';
+const state = loadState();
+
+const el = {
+  productImageInput: document.getElementById('productImageInput'),
+  frameImageInput: document.getElementById('frameImageInput'),
+  productPreview: document.getElementById('productPreview'),
+  framePreview: document.getElementById('framePreview'),
+  productName: document.getElementById('productName'),
+  brandName: document.getElementById('brandName'),
+  productParams: document.getElementById('productParams'),
+  sp1: document.getElementById('sp1'),
+  sp2: document.getElementById('sp2'),
+  sp3: document.getElementById('sp3'),
+  targetLang: document.getElementById('targetLang'),
+  category: document.getElementById('category'),
+  scene: document.getElementById('scene'),
+  style: document.getElementById('style'),
+  customScene: document.getElementById('customScene'),
+  inpaintRequest: document.getElementById('inpaintRequest'),
+  output: document.getElementById('output'),
+  previewCanvas: document.getElementById('previewCanvas'),
+  genPreprocessBtn: document.getElementById('genPreprocessBtn'),
+  genPlanBtn: document.getElementById('genPlanBtn'),
+  genRenderPromptBtn: document.getElementById('genRenderPromptBtn'),
+  genInpaintPromptBtn: document.getElementById('genInpaintPromptBtn'),
+  copyPromptBtn: document.getElementById('copyPromptBtn'),
+  exportTxtBtn: document.getElementById('exportTxtBtn'),
+  exportPngBtn: document.getElementById('exportPngBtn'),
+  clearAllBtn: document.getElementById('clearAllBtn')
 };
-let db = load(STORAGE_KEY, {});
-let history = load(HISTORY_KEY, []);
-let charts = {};
-let tableSort = {};
+
+const productImg = new Image();
+const frameImg = new Image();
+let productLoaded = false;
+let frameLoaded = false;
 
 init();
+
 function init() {
-  for (let m = 1; m <= 12; m++) document.getElementById('monthFilter').insertAdjacentHTML('beforeend', `<option value="${m}">${m}月</option>`);
-  renderUploadCards();
-  renderClearButtons();
-  bindNav(); bindFilters(); bindExporters();
-  refreshAll();
+  bindInputs();
+  restoreForm();
+  restoreImages();
+  drawPreview();
 }
-function bindNav() {
-  document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
-    document.querySelectorAll('.nav-btn').forEach(x => x.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(btn.dataset.target).classList.add('active');
+
+function bindInputs() {
+  el.productImageInput.addEventListener('change', e => readImageFile(e.target.files[0], true));
+  el.frameImageInput.addEventListener('change', e => readImageFile(e.target.files[0], false));
+
+  [
+    'productName', 'brandName', 'productParams', 'sp1', 'sp2', 'sp3', 'targetLang',
+    'category', 'scene', 'style', 'customScene', 'inpaintRequest'
+  ].forEach(id => {
+    el[id].addEventListener('input', () => {
+      saveState();
+      drawPreview();
+    });
   });
+
+  el.genPreprocessBtn.addEventListener('click', () => writeOutput(generatePreprocessPrompt()));
+  el.genPlanBtn.addEventListener('click', () => writeOutput(generatePlan()));
+  el.genRenderPromptBtn.addEventListener('click', () => writeOutput(generateRenderPrompt()));
+  el.genInpaintPromptBtn.addEventListener('click', () => writeOutput(generateInpaintPrompt()));
+  el.copyPromptBtn.addEventListener('click', copyPrompt);
+  el.exportTxtBtn.addEventListener('click', exportPromptTxt);
+  el.exportPngBtn.addEventListener('click', exportPreviewPng);
+  el.clearAllBtn.addEventListener('click', clearAll);
 }
-function bindFilters() {
-  ['orderSearch', 'productSearch', 'bizType', 'managerFilter', 'shopFilter', 'monthFilter', 'categoryFilter'].forEach(id => document.getElementById(id).oninput = refreshAll);
-  document.getElementById('clearFilter').onclick = () => {
-    ['orderSearch', 'productSearch', 'bizType', 'managerFilter', 'shopFilter', 'monthFilter', 'categoryFilter'].forEach(id => document.getElementById(id).value = '');
-    refreshAll();
-  };
-  document.getElementById('exportFiltered').onclick = () => exportCSV('filtered_sales.csv', getFiltered().sales);
-}
-function bindExporters() {
-  document.querySelectorAll('.table-export').forEach(btn => btn.onclick = () => exportTableCSV(btn.dataset.table));
-}
-function renderUploadCards() {
-  const box = document.getElementById('uploadGrid');
-  box.innerHTML = DATASETS.map(d => `<article class="card"><h3>${d.name}</h3><input type="file" accept=".xlsx,.xls,.csv" data-key="${d.key}" /></article>`).join('');
-  box.querySelectorAll('input[type=file]').forEach(input => input.onchange = e => handleUpload(e.target.dataset.key, e.target.files[0]));
-}
-function renderClearButtons() {
-  const box = document.getElementById('clearButtons');
-  box.innerHTML = DATASETS.map(d => `<button data-key="${d.key}">清空${d.name}</button>`).join('') + `<button id="clearAll">清空全部数据</button>`;
-  box.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = () => { delete db[btn.dataset.key]; persist(); refreshAll(); });
-  document.getElementById('clearAll').onclick = () => { db = {}; history = []; persist(); refreshAll(); };
-}
-function handleUpload(key, file) {
+
+function readImageFile(file, isProduct) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const wb = XLSX.read(ev.target.result, { type: 'binary' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    db[key] = rows.map(r => normalizeRow(r));
-    history.unshift({ key, file: file.name, rows: rows.length, time: new Date().toISOString() });
-    history = history.slice(0, 100);
-    persist();
-    document.getElementById('uploadMsg').textContent = '上传成功，数据已保存';
-    refreshAll();
+    const dataUrl = ev.target.result;
+    if (isProduct) {
+      productImg.onload = () => { productLoaded = true; drawPreview(); };
+      productImg.src = dataUrl;
+      el.productPreview.src = dataUrl;
+      el.productPreview.style.display = 'block';
+      state.productImage = dataUrl;
+    } else {
+      frameImg.onload = () => { frameLoaded = true; drawPreview(); };
+      frameImg.src = dataUrl;
+      el.framePreview.src = dataUrl;
+      el.framePreview.style.display = 'block';
+      state.frameImage = dataUrl;
+    }
+    saveState();
   };
-  reader.readAsBinaryString(file);
+  reader.readAsDataURL(file);
 }
-function normalizeRow(r) {
-  const row = {};
-  row.orderNo = pick(r, F.orderNo); row.date = toDate(pick(r, F.date)); row.manager = pick(r, F.manager);
-  row.shop = pick(r, F.shop); row.sku = pick(r, F.sku); row.product = pick(r, F.product); row.category = pick(r, F.category);
-  row.orderQty = num(pick(r, F.orderQty)); row.salesQty = num(pick(r, F.salesQty)); row.amount = num(pick(r, F.amount)); row.bizType = pick(r, F.bizType);
-  row.transitQty = num(pick(r, F.transitQty)); row.transitStatus = pick(r, F.transitStatus); row.transitStatusNum = STATUS_MAP[row.transitStatus] || num(row.transitStatus);
-  row.eta = pick(r, F.eta); row.warehouseQty = num(pick(r, F.warehouseQty)); row.availableQty = num(pick(r, F.availableQty)); row.days = num(pick(r, F.days));
-  row.overdueQty = num(pick(r, F.overdueQty)); row.overdueAmount = num(pick(r, F.overdueAmount));
-  row.afterType = pick(r, F.afterType); row.isCod = String(pick(r, F.isCod)).toLowerCase().includes('y') || String(pick(r, F.isCod)).includes('是');
-  row.refundAmount = num(pick(r, F.refundAmount));
-  return row;
+
+function drawPreview() {
+  const canvas = el.previewCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const grd = ctx.createLinearGradient(0, 0, w, h);
+  grd.addColorStop(0, '#fff6ec');
+  grd.addColorStop(1, '#ffe7d1');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  roundRect(ctx, 25, 25, 750, 750, 26, true);
+
+  const title = suggestTitle();
+  const subtitle = suggestSubtitle();
+  const points = getSellingPoints();
+
+  ctx.fillStyle = '#1d1d1f';
+  ctx.font = 'bold 42px -apple-system, sans-serif';
+  drawTextBlock(ctx, title, 55, 120, 285, 50);
+  ctx.fillStyle = '#4f5b76';
+  ctx.font = '500 24px -apple-system, sans-serif';
+  drawTextBlock(ctx, subtitle, 55, 220, 285, 34);
+
+  let y = 300;
+  points.forEach((p, i) => {
+    ctx.fillStyle = '#ff8d3b';
+    ctx.beginPath();
+    ctx.arc(67, y - 9, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1f2a44';
+    ctx.font = '600 22px -apple-system, sans-serif';
+    drawTextBlock(ctx, `${iconHint(i)} ${p}`, 88, y, 250, 30);
+    y += 64;
+  });
+
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  roundRect(ctx, 45, 620, 250, 130, 14, true);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '500 17px -apple-system, sans-serif';
+  drawTextBlock(ctx, sceneSuggestion(), 58, 660, 220, 24);
+
+  ctx.fillStyle = 'rgba(0,0,0,.15)';
+  ctx.beginPath();
+  ctx.ellipse(560, 640, 165, 30, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (productLoaded) {
+    drawContain(ctx, productImg, 390, 120, 370, 520);
+  } else {
+    ctx.fillStyle = '#c8d2e4';
+    roundRect(ctx, 410, 150, 320, 440, 14, true);
+    ctx.fillStyle = '#73819a';
+    ctx.font = '600 20px -apple-system, sans-serif';
+    ctx.fillText('产品主体预览区', 478, 380);
+  }
+
+  if (frameLoaded) {
+    ctx.drawImage(frameImg, 0, 0, w, h);
+  } else {
+    ctx.strokeStyle = '#ffd2ae';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(8, 8, w - 16, h - 16);
+  }
 }
-function pick(obj, keys) {
-  const map = Object.fromEntries(Object.keys(obj).map(k => [clean(k), obj[k]]));
-  for (const k of keys) if (map[clean(k)] !== undefined) return String(map[clean(k)]).trim();
-  return '';
+
+function generatePreprocessPrompt() {
+  return `Please enhance this product photo into a high-resolution white-background e-commerce product image.
+Fix low light, blur, noise, poor exposure and uneven color.
+Remove the messy background and create a clean pure white background.
+Keep the product shape, structure, logo, material, color and proportion exactly the same.
+Preserve complex edges, transparent parts, metal reflections, glossy surfaces and realistic shadows.
+Do not make the product look plastic, fake, cartoonish or over-smoothed.
+Do not add extra parts.
+Output a clean, sharp, realistic product cutout suitable for TikTok Shop product image generation.`;
 }
-function clean(s) { return String(s).replace(/\s+/g, '').toLowerCase(); }
-function num(v) { const n = Number(String(v).replace(/[,%￥,]/g, '')); return Number.isFinite(n) ? n : 0; }
-function toDate(v) {
-  if (!v) return '';
-  if (typeof v === 'number') return XLSX.SSF.format('yyyy-mm-dd', v);
-  const d = new Date(v); if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
+
+function generatePlan() {
+  const pts = getSellingPoints();
+  const lines = pts.map((p, i) => `${i + 1}) ${p}\n   - Icon: ${iconHint(i)}\n   - Visual: ${visualHint(i)}`).join('\n');
+  return `【印尼 TikTok 主图方案】
+Title: ${suggestTitle()}
+Subtitle: ${suggestSubtitle()}
+
+三个核心卖点：
+${lines}
+
+使用场景蒙版建议：
+- ${sceneSuggestion()}
+
+主图布局（固定）：
+- 画布尺寸：800x800
+- 右侧：产品主体，占画面55%-65%
+- 左侧：主标题、副标题、3个卖点ICON
+- 左下角：小场景蒙版
+- 底部：用户上传主图框（保持不变）
+- 背景：浅橙渐变或温馨家居色调
+- 产品底部：柔和接触阴影
+- 产品不能贴边；文字必须清晰可读`;
 }
-function load(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
-function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
-function getFiltered() {
-  const fs = {
-    orderSearch: document.getElementById('orderSearch').value.trim(), productSearch: document.getElementById('productSearch').value.trim(),
-    bizType: document.getElementById('bizType').value, manager: document.getElementById('managerFilter').value, shop: document.getElementById('shopFilter').value,
-    month: document.getElementById('monthFilter').value, category: document.getElementById('categoryFilter').value
+
+function generateRenderPrompt() {
+  const categoryFx = categoryEffects(el.category.value, `${el.productName.value} ${el.productParams.value}`);
+  const localized = localizeBenefits(getSellingPoints().join('; ') + '; ' + el.productParams.value);
+  return `[Role]
+You are a senior e-commerce product image designer for TikTok Shop Indonesia.
+
+[Task]
+Create a high-conversion 1:1 product main image for Indonesian TikTok Shop.
+
+[Input]
+Product name: ${el.productName.value || 'N/A'}
+Brand: ${el.brandName.value || 'Tixx'}
+Product parameters: ${el.productParams.value || 'N/A'}
+Core selling points: ${getSellingPoints().join(' | ')}
+Target language: ${el.targetLang.value}
+Scene style: ${el.style.value}
+Main image frame: uploaded PNG frame, keep unchanged
+
+[Visual Requirements]
+- 800x800 square image
+- Apple-like clean commercial design
+- warm home atmosphere
+- realistic product rendering
+- no distortion
+- keep the product shape, color, logo and material exactly the same
+- product placed on the right side, occupying about 60% of the canvas
+- left side includes one title, one subtitle, and three selling points with icons
+- add one small lifestyle usage scene mask at bottom-left
+- use soft orange gradient background suitable for Tixx brand
+- add realistic light, shadow, reflection and perspective
+- keep the uploaded main image frame unchanged
+- PNG output
+
+[Indonesia Localization]
+${localized}
+
+[Category Effects]
+${categoryFx}
+
+[Prohibitions]
+- Do not change the product structure
+- Do not change the brand logo
+- Do not invent extra buttons or parts
+- Do not make the product look cartoonish
+- Do not make the edges look like paper cutout
+- Do not use messy background
+- Do not use unreadable text
+- Do not crop the main image frame
+- Do not distort the frame`;
+}
+
+function generateInpaintPrompt() {
+  const req = el.inpaintRequest.value.trim() || 'Refine the selected local area with better commercial details.';
+  return `Please only modify the selected area.
+Keep all other parts unchanged.
+Modification request:
+${req}
+Maintain the same lighting, perspective, color tone and commercial e-commerce style.
+Do not change the product body, logo, frame or existing readable text.`;
+}
+
+function suggestTitle() {
+  const name = el.productName.value || 'Smart Home Appliance';
+  if (el.targetLang.value === '印尼语') return `${name} • Pilihan Keluarga`; 
+  if (el.targetLang.value === '印尼语+英文') return `${name} • Hemat Listrik / Energy Saving`;
+  return `${name} • Better Everyday Living`;
+}
+
+function suggestSubtitle() {
+  const p = getSellingPoints()[0] || 'Hemat listrik & nyaman untuk keluarga';
+  if (el.targetLang.value === '英文') return `Fast, quiet, and family-friendly performance`;
+  if (el.targetLang.value === '印尼语+英文') return `${p} / Fast, quiet, family-safe`;
+  return `${p}，适合印尼家庭日常使用`;
+}
+
+function getSellingPoints() {
+  return [el.sp1.value, el.sp2.value, el.sp3.value].filter(Boolean).length
+    ? [el.sp1.value || '节能省电', el.sp2.value || '安静运行', el.sp3.value || '家庭友好']
+    : ['节能省电', '安静运行', '家庭友好'];
+}
+
+function sceneSuggestion() {
+  if (el.scene.value === '自定义') return el.customScene.value || 'Custom lifestyle scene';
+  const map = {
+    '现代雅加达公寓': 'Modern Jakarta apartment kitchen',
+    '印尼家庭厨房': 'Cozy Indonesian family kitchen',
+    '小户型卧室': 'Compact boarding house bedroom',
+    '客厅': 'Warm Indonesian family living room',
+    '洗衣区': 'Laundry corner with clean floor'
   };
-  const pass = row => {
-    if (fs.orderSearch && ![row.orderNo, row.manager, row.shop].join('|').includes(fs.orderSearch)) return false;
-    if (fs.productSearch && ![row.sku, row.product].join('|').includes(fs.productSearch)) return false;
-    if (fs.bizType && row.bizType && row.bizType !== fs.bizType) return false;
-    if (fs.manager && row.manager !== fs.manager) return false;
-    if (fs.shop && row.shop !== fs.shop) return false;
-    if (fs.category && row.category !== fs.category) return false;
-    if (fs.month && row.date) { if ((new Date(row.date).getMonth() + 1) !== Number(fs.month)) return false; }
-    return true;
-  };
-  return {
-    orders: (db.orders || []).filter(pass), transit: (db.transit || []).filter(pass), inventory: (db.inventory || []).filter(pass),
-    sales: (db.sales || []).filter(pass), overdue: (db.overdue || []).filter(pass), afterSales: (db.afterSales || []).filter(pass)
-  };
+  return map[el.scene.value] || 'Indonesian home scene';
 }
-function refreshAll() {
-  const d = getFiltered();
-  renderKPIs(d); renderCharts(d);
-  const warnings = computeWarnings(d.inventory, d.transit);
-  renderWarningTable(warnings); renderAfterSales(d); renderWeeklyTable(d.sales); renderHistory();
-}
-function renderKPIs(d) {
-  const warnings = computeWarnings(d.inventory, d.transit);
-  const totalOrders = sum(d.orders, 'orderQty') || d.orders.length;
-  const totalAmount = sum(d.sales, 'amount');
-  const totalQty = sum(d.sales, 'salesQty');
-  const invQty = sum(d.inventory, 'availableQty');
-  const outWarn = warnings.filter(w => w.type === '断货预警').length;
-  const overWarn = warnings.filter(w => w.type !== '断货预警').length;
-  const afterRate = totalOrders ? (d.afterSales.length / totalOrders) : 0;
-  const totalRefund = d.afterSales.filter(x => x.afterType.includes('退款')).length;
-  const codRefund = d.afterSales.filter(x => x.afterType.includes('退款') && x.isCod).length;
-  const codRate = totalRefund ? codRefund / totalRefund : 0;
-  const cards = [
-    ['总订单数', fmt(totalOrders)], ['总销售额', money(totalAmount)], ['总销量', fmt(totalQty)], ['可用库存总量', fmt(invQty)],
-    ['断货预警数量', fmt(outWarn)], ['超期预警数量', fmt(overWarn)], ['售后率', pct(afterRate)], ['COD退款占比', pct(codRate)]
+
+function localizeBenefits(text) {
+  const dict = [
+    ['energy saving', 'Hemat listrik'],
+    ['quiet operation', 'Tidak berisik'],
+    ['fast cooling', 'Cepat dingin'],
+    ['large capacity', 'Kapasitas besar'],
+    ['safe for family', 'Aman untuk keluarga'],
+    ['easy to clean', 'Mudah dibersihkan'],
+    ['strong suction', 'Daya hisap kuat'],
+    ['hot and cold water', 'Air panas & dingin']
   ];
-  document.getElementById('kpiGrid').innerHTML = cards.map(c => `<div class="kpi"><div class="label">${c[0]}</div><div class="value">${c[1]}</div></div>`).join('');
+  const low = (text || '').toLowerCase();
+  const matched = dict.filter(([en]) => low.includes(en)).map(([en, id]) => `- ${en} = ${id}`);
+  return matched.length ? matched.join('\n') : dict.map(([en, id]) => `- ${en} = ${id}`).join('\n');
 }
-function renderCharts(d) {
-  line('orderTrendChart', groupByDate(d.orders, 'orderQty', true), '订单数量', '上周对比');
-  line('salesTrendChart', groupByDate(d.sales, 'amount'), '销售额', '上周对比');
-  comboByCategory('categorySalesChart', d.sales, 'salesQty', 'amount', '销售数量', '销售金额');
-  inventoryChart(d); transitChart(d.transit); overdueChart(d.overdue);
-  pieBar('managerPieChart', 'managerBarChart', d.sales, 'manager');
-  pieBar('shopPieChart', 'shopBarChart', d.sales, 'shop');
-  dailyTrackChart(d.sales);
+
+function categoryEffects(cat, mixedText) {
+  const low = (mixedText || '').toLowerCase();
+  if (cat === '清洁电器') return '- Add dynamic visual effects of water stains, foam, and dirt being absorbed.';
+  if (low.includes('冷风扇')) return '- Add blue airflow lines, cool mist, and icy freshness effects.';
+  if (low.includes('除湿机')) return '- Add droplets, dry-air flow, and before/after humidity contrast.';
+  if (low.includes('饮水机')) return '- Add hot/cold/normal water symbols and clean hydration cues.';
+  if (low.includes('冰箱')) return '- Add metallic reflections, kitchen ambient light, and fresh ingredient feeling.';
+  if (low.includes('空气净化器')) return '- Add air flow paths, filtration route visuals, and clean-air glow.';
+  return '- Add subtle category-relevant commercial effects without changing product structure.';
 }
-function groupByDate(rows, key, defaultOne = false) {
-  const m = {};
-  rows.forEach(r => { if (!r.date) return; m[r.date] = (m[r.date] || 0) + (defaultOne ? (r[key] || 1) : r[key]); });
-  return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+
+function iconHint(i) {
+  return ['⚡', '🔇', '🏠'][i] || '✔';
 }
-function line(id, series, label, compareLabel) {
-  if (!series.length) return emptyChart(id);
-  const labels = series.map(x => x[0]), data = series.map(x => x[1]);
-  const prev = data.map((_, i) => data[Math.max(0, i - 7)] || 0);
-  chart(id, 'line', {
-    labels,
-    datasets: [{ label, data, borderColor: '#0071e3' }, { label: compareLabel, data: prev, borderColor: '#8e8e93' }]
+
+function visualHint(i) {
+  return ['橙色能量符号 + 柔光', '低噪波纹线 + 静谧图标', '家庭剪影 + 温暖背景'][i] || '简洁图标强调利益点';
+}
+
+function drawContain(ctx, img, x, y, boxW, boxH) {
+  const ratio = Math.min(boxW / img.width, boxH / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  const dx = x + (boxW - w) / 2;
+  const dy = y + (boxH - h) / 2;
+  ctx.drawImage(img, dx, dy, w, h);
+}
+
+function drawTextBlock(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text).split('');
+  let line = '';
+  for (let i = 0; i < words.length; i++) {
+    const test = line + words[i];
+    if (ctx.measureText(test).width > maxWidth) {
+      ctx.fillText(line, x, y);
+      line = words[i];
+      y += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
+}
+
+function roundRect(ctx, x, y, w, h, r, fill) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  if (fill) ctx.fill();
+}
+
+function writeOutput(text) {
+  el.output.value = text;
+  state.lastPrompt = text;
+  saveState();
+}
+
+async function copyPrompt() {
+  if (!el.output.value.trim()) return alert('请先生成 Prompt。');
+  try {
+    await navigator.clipboard.writeText(el.output.value);
+    alert('Prompt 已复制');
+  } catch {
+    el.output.select();
+    document.execCommand('copy');
+    alert('Prompt 已复制');
+  }
+}
+
+function exportPromptTxt() {
+  if (!el.output.value.trim()) return alert('请先生成 Prompt。');
+  const blob = new Blob([el.output.value], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tixx_prompt.txt';
+  a.click();
+}
+
+function exportPreviewPng() {
+  const a = document.createElement('a');
+  a.href = el.previewCanvas.toDataURL('image/png');
+  a.download = 'tixx_preview.png';
+  a.click();
+}
+
+function clearAll() {
+  if (!confirm('确认清空全部内容？')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  Object.keys(el).forEach(k => {
+    if (['output', 'productName', 'brandName', 'productParams', 'sp1', 'sp2', 'sp3', 'customScene', 'inpaintRequest'].includes(k)) el[k].value = '';
+    if (['targetLang', 'category', 'scene', 'style'].includes(k)) el[k].selectedIndex = 0;
   });
+  el.brandName.value = 'Tixx';
+  el.productPreview.style.display = 'none';
+  el.framePreview.style.display = 'none';
+  el.productImageInput.value = '';
+  el.frameImageInput.value = '';
+  productLoaded = false;
+  frameLoaded = false;
+  state.productImage = '';
+  state.frameImage = '';
+  state.lastPrompt = '';
+  saveState();
+  drawPreview();
 }
-function comboByCategory(id, rows, qtyKey, amountKey, ql, al) {
-  const cates = ['厨房电器','大型电器','个护电器','净水饮水','清洁电器','生活电器'];
-  const qty = cates.map(c => sum(rows.filter(r=>r.category===c), qtyKey));
-  const amt = cates.map(c => sum(rows.filter(r=>r.category===c), amountKey));
-  chart(id, 'bar', { labels: cates, datasets: [{ label: ql, data: qty, backgroundColor: '#5ac8fa' }, { label: al, type: 'line', data: amt, borderColor: '#0071e3', yAxisID:'y1' }] }, { scales: { y1: { position: 'right' } } });
+
+function saveState() {
+  state.form = {
+    productName: el.productName.value,
+    brandName: el.brandName.value,
+    productParams: el.productParams.value,
+    sp1: el.sp1.value,
+    sp2: el.sp2.value,
+    sp3: el.sp3.value,
+    targetLang: el.targetLang.value,
+    category: el.category.value,
+    scene: el.scene.value,
+    style: el.style.value,
+    customScene: el.customScene.value,
+    inpaintRequest: el.inpaintRequest.value
+  };
+  state.lastPrompt = el.output.value || state.lastPrompt || '';
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
-function inventoryChart(d) {
-  const cates = ['厨房电器','大型电器','个护电器','净水饮水','清洁电器','生活电器'];
-  const warnings = computeWarnings(d.inventory, d.transit);
-  const warningSku = new Set(warnings.map(w=>w.sku));
-  const val = cates.map(c => sum(d.inventory.filter(r => r.category===c), 'availableQty'));
-  const color = cates.map(c => d.inventory.some(x=>x.category===c && warningSku.has(x.sku)) ? '#ff9f0a' : '#34c759');
-  chart('inventoryChart', 'bar', { labels: cates, datasets: [{ label:'可用库存量', data: val, backgroundColor: color }] });
-}
-function transitChart(rows) {
-  const top = aggregate(rows, 'product', ['transitQty','transitStatusNum']).slice(0,12);
-  chart('transitChart','bar',{ labels: top.map(x=>x.k), datasets:[{label:'在途库存量',data:top.map(x=>x.transitQty),backgroundColor:'#64d2ff'},{label:'在途状态',type:'line',data:top.map(x=>x.transitStatusNum),borderColor:'#5856d6',yAxisID:'y1'}]}, { scales: { y1: { position:'right', min:0, max:4 } } });
-}
-function overdueChart(rows) {
-  const top = aggregate(rows, 'product', ['overdueQty','overdueAmount']).slice(0,12);
-  chart('overdueChart','bar',{ labels: top.map(x=>x.k), datasets:[{label:'超期库存量',data:top.map(x=>x.overdueQty),backgroundColor:'#ff9f0a'},{label:'超期金额',type:'line',data:top.map(x=>x.overdueAmount),borderColor:'#ff3b30',yAxisID:'y1'}]}, { scales: { y1: { position:'right' } } });
-}
-function pieBar(pieId, barId, rows, dim) {
-  const ag = aggregate(rows, dim, ['amount','salesQty']).filter(x=>x.k).slice(0,10);
-  chart(pieId, 'pie', { labels: ag.map(x=>x.k), datasets:[{ data: ag.map(x=>x.amount) }] });
-  chart(barId, 'bar', { labels: ag.map(x=>x.k), datasets:[{ label:'订单量', data: ag.map(x=>x.salesQty), backgroundColor:'#30b0c7' }] });
-}
-function dailyTrackChart(rows) {
-  const daily = groupByDate(rows, 'salesQty').map(x=>({date:x[0], qty:x[1], amount:sum(rows.filter(r=>r.date===x[0]),'amount')}));
-  chart('dailyTrackChart','line',{ labels: daily.map(x=>x.date), datasets:[{label:'日销量',data:daily.map(x=>x.qty),borderColor:'#34c759'},{label:'日销售额',data:daily.map(x=>x.amount),borderColor:'#0071e3'}]});
-}
-function renderWeeklyTable(rows) {
-  const latest = maxDate(rows); const prev = shiftDate(latest, -7);
-  const thisWeek = rows.filter(r => r.date >= prev && r.date <= latest);
-  const lastWeek = rows.filter(r => r.date < prev && r.date >= shiftDate(prev, -7));
-  const a = aggregate(thisWeek, 'sku', ['salesQty','amount']);
-  const b = Object.fromEntries(aggregate(lastWeek, 'sku', ['salesQty','amount']).map(x=>[x.k,x]));
-  const table = a.map(x => {
-    const y = b[x.k] || { salesQty: 0, amount: 0 };
-    const rate = y.salesQty ? (x.salesQty - y.salesQty) / y.salesQty : 1;
-    return { SKU: x.k, 产品名称: thisWeek.find(r=>r.sku===x.k)?.product||'', 本周销量: x.salesQty, 上周销量: y.salesQty, 涨跌幅: pct(rate), 销售额变化: money(x.amount - y.amount) };
-  }).sort((m,n)=>num(n.本周销量)-num(m.本周销量));
-  renderTable('weeklyChangeTable', table);
-}
-function renderWarningTable(warnings) {
-  const rows = warnings.map(w => ({ SKU:w.sku, 产品名称:w.product, 产品类目:w.category, 可用库存量:w.availableQty, 当前可售天数:w.days, 在途库存量:w.transitQty, 预警类型:`<span class="tag ${w.type}">${w.type}</span>`, 建议动作:w.action }));
-  renderTable('warningTable', rows, true);
-}
-function computeWarnings(inventory, transit) {
-  const t = Object.fromEntries(aggregate(transit, 'sku', ['transitQty']).map(x=>[x.k,x.transitQty]));
-  const list = [];
-  inventory.forEach(r => {
-    const tq = t[r.sku] || 0; const noTransit = !tq;
-    let type = '正常', action = '保持当前节奏';
-    if ((r.availableQty < 50 && noTransit) || (r.days < 10 && noTransit)) { type = '断货预警'; action = '建议尽快补货或调整推广节奏'; }
-    else if (r.days > 80) { type = '超期预警'; action = '建议加大促销、达人带货、直播间主推'; }
-    else if (r.days > 50 && tq > 100) { type = '超期风险预警'; action = '建议暂停补货，优先清理库存'; }
-    if (type !== '正常') list.push({ ...r, type, action, transitQty:tq });
+
+function restoreForm() {
+  const f = state.form || {};
+  Object.keys(f).forEach(k => {
+    if (el[k]) el[k].value = f[k] ?? el[k].value;
   });
-  return list;
+  el.output.value = state.lastPrompt || '';
 }
-function renderAfterSales(d) {
-  const totalOrders = sum(d.orders, 'orderQty') || d.orders.length || 1;
-  const byProduct = aggregate(d.afterSales, 'product', ['refundAmount']).map(x => ({ k: x.k, count: d.afterSales.filter(r=>r.product===x.k).length }));
-  chart('afterRateChart','bar',{ labels: byProduct.slice(0,12).map(x=>x.k), datasets:[{label:'售后率',data:byProduct.slice(0,12).map(x=>x.count/totalOrders*100),backgroundColor:'#ff375f'}]});
-  const typeMap = {}; d.afterSales.forEach(r=> typeMap[r.afterType||'未知']=(typeMap[r.afterType||'未知']||0)+1);
-  chart('afterTypeChart','pie',{ labels:Object.keys(typeMap), datasets:[{ data:Object.values(typeMap) }]});
-  const rows = d.afterSales.map(r=>({ 订单编号:r.orderNo, 日期:r.date, 店长:r.manager, 店铺:r.shop, SKU:r.sku, 产品名称:r.product, 售后类型:r.afterType, 是否COD:r.isCod?'是':'否', 退款金额:money(r.refundAmount) }));
-  renderTable('afterTable', rows);
+
+function restoreImages() {
+  if (state.productImage) {
+    productImg.onload = () => { productLoaded = true; drawPreview(); };
+    productImg.src = state.productImage;
+    el.productPreview.src = state.productImage;
+    el.productPreview.style.display = 'block';
+  }
+  if (state.frameImage) {
+    frameImg.onload = () => { frameLoaded = true; drawPreview(); };
+    frameImg.src = state.frameImage;
+    el.framePreview.src = state.frameImage;
+    el.framePreview.style.display = 'block';
+  }
 }
-function renderHistory() {
-  document.getElementById('historyList').innerHTML = history.length ? history.map(h => `<div class="item">${h.time.slice(0,19).replace('T',' ')} ｜ ${nameOf(h.key)} ｜ ${h.file} ｜ ${h.rows} 行</div>`).join('') : '暂无历史上传记录';
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { form: {}, productImage: '', frameImage: '', lastPrompt: '' };
+  } catch {
+    return { form: {}, productImage: '', frameImage: '', lastPrompt: '' };
+  }
 }
-function renderTable(id, rows, rawHtml = false) {
-  const el = document.getElementById(id);
-  if (!rows.length) return el.innerHTML = '<tr><td>请先上传数据</td></tr>';
-  const cols = Object.keys(rows[0]);
-  const st = tableSort[id] || { col: cols[0], asc: true };
-  rows.sort((a,b)=> String(a[st.col]).localeCompare(String(b[st.col]), 'zh-Hans-CN', { numeric:true }) * (st.asc?1:-1));
-  el.innerHTML = `<thead><tr>${cols.map(c => `<th data-t="${id}" data-c="${c}">${c}${st.col===c?(st.asc?'↑':'↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${rawHtml?r[c]:escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}</tbody>`;
-  el.querySelectorAll('th').forEach(th => th.onclick = () => { const t = th.dataset.t, c = th.dataset.c; tableSort[t] = { col:c, asc: tableSort[t]?.col===c ? !tableSort[t].asc : true }; renderTable(t, rows, rawHtml); });
-}
-function exportCSV(filename, rows) {
-  if (!rows.length) return alert('没有可导出的数据');
-  const cols = Object.keys(rows[0]);
-  const csv = [cols.join(','), ...rows.map(r => cols.map(c => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-}
-function exportTableCSV(tableId) {
-  const table = document.getElementById(tableId); if (!table || !table.rows.length) return;
-  const rows = [...table.rows].map(r => [...r.cells].map(c => `"${c.innerText.replace(/"/g, '""')}"`).join(','));
-  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${tableId}.csv`; a.click();
-}
-function chart(id, type, data, options = {}) {
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(document.getElementById(id), { type, data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, ...options } });
-}
-function emptyChart(id) {
-  if (charts[id]) charts[id].destroy();
-  const ctx = document.getElementById(id).getContext('2d');
-  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); ctx.font='16px sans-serif'; ctx.fillStyle='#8e8e93'; ctx.fillText('请先上传数据', 20, 40);
-}
-function aggregate(rows, key, fields) {
-  const m = {};
-  rows.forEach(r => { const k = r[key] || '未知'; m[k] = m[k] || { k }; fields.forEach(f => m[k][f] = (m[k][f] || 0) + num(r[f])); });
-  return Object.values(m);
-}
-function maxDate(rows) { return rows.map(r=>r.date).filter(Boolean).sort().pop() || new Date().toISOString().slice(0,10); }
-function shiftDate(date, d) { const t = new Date(date); t.setDate(t.getDate() + d); return t.toISOString().slice(0,10); }
-function sum(rows, field) { return rows.reduce((s, r) => s + num(r[field]), 0); }
-function nameOf(key) { return DATASETS.find(d => d.key===key)?.name || key; }
-function fmt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
-function money(n) { return '¥' + Number(n || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 }); }
-function pct(n) { return (Number(n || 0) * 100).toFixed(2) + '%'; }
-function escapeHtml(v){ return String(v ?? '').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
